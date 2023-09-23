@@ -1,5 +1,6 @@
 import scala.io.Source
 import scala.util.Using
+import java.io.File
 
 /** Checks if all dates are in ascending order inside the file
   */
@@ -10,7 +11,8 @@ def validate(fileName: String): Unit =
     val iterator = source.getLines()
 
     if iterator.hasNext then
-      val combined = iterator.zip(iterator.drop(1))
+      val combined = iterator.sliding(2).collect:
+        case Seq(a,b) => (a, b)
 
       val result = combined.forall { (less, greater) =>
         val isBeforeOpt =
