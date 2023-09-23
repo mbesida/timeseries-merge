@@ -16,3 +16,8 @@ project/plugins/project/
 .scala_dependencies
 .worksheet
 .idea/vcs.xml
+data
+
+.bsp
+.scala-build
+

@@ -1,4 +1,5 @@
-package com.mbesida.timeseries
+//> using scala "3.3.1"
+
 
 import java.io.{BufferedWriter, File, FileWriter}
 import java.nio.file.{Files, Paths}
