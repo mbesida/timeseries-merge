@@ -10,7 +10,7 @@ def generate(): Unit =
   if os.exists(OutputFolder) then
     println(s"Removing directory ${OutputFolder.toString}")
     os.remove.all(OutputFolder)
-    
+
   println(s"Creating directory ${OutputFolder.toString}")
   os.makeDir(OutputFolder)
   for idx <- (1 to 100)

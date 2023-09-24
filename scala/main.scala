@@ -1,91 +1,103 @@
 //> using scala "3.3.1"
-//> using toolkit latest
+//> using lib "com.lihaoyi::os-lib:0.9.1"
 
-
-import java.io.{BufferedWriter, File, FileWriter}
-import java.nio.file.{Files, Paths}
+import java.io.BufferedWriter
+import java.nio.file.Files
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-
+import scala.annotation.nowarn
 import scala.annotation.tailrec
-import scala.io.{Codec, Source}
-import scala.util.Try
+import scala.io.Codec
+import scala.io.Source
+import scala.util.Using
 
-
-object Main  {
+object Main:
   import Record._
 
   private val MaxNumberOfFiles = 100
 
   def main(args: Array[String]): Unit = {
     if (args.size < 2) {
-      println("""Usage:
+      println(
+        """Usage:
                 | - first argument is output file name
                 | - if second argument is a directory all files in that directory are considered as timeseries data
                 |   and are processed by the program, but no more than 100 files
-                | - if second argument isn't a directory then second and all other arguments are considered as file names to process""".stripMargin)
+                | - if second argument isn't a directory then second and all other arguments are considered as file names to process""".stripMargin
+      )
     } else {
-      Files.deleteIfExists(Paths.get(args.head)) //delete output file if it exists
+      val target = os.pwd / args(0)
+      os.remove(target) // delete output file if it exists
 
-      val inputFiles = if (Files.isDirectory(Paths.get(args(1)))) {
-        new File(args(1)).listFiles().withFilter(!_.isDirectory).map(f =>  s"${f.getParent}/${f.getName}").take(MaxNumberOfFiles)
-      } else args.tail.distinct.take(MaxNumberOfFiles)
+      val source = os.pwd / args(1)
 
-      if (inputFiles.nonEmpty) {
-        println(s"Start merging  following files: ${inputFiles.mkString(", ")}")
-        val output = new BufferedWriter(new FileWriter(args.head, true))
+      val inputFiles =
+        if os.isDir(source) then
+          os.list(source).filter(os.isFile).take(MaxNumberOfFiles)
+        else
+          val files = args.tail.distinct.map(os.pwd / _).take(MaxNumberOfFiles)
+          files.filter(path => os.exists(path) && os.isFile(path)).toIndexedSeq
 
-        val iterators = inputFiles.map(file => Source.fromFile(file, Codec.UTF8.name).getLines())
+      if inputFiles.nonEmpty then
+        println(
+          s"Start merging  following files: ${inputFiles.map(_.toNIO.getFileName()).mkString(", ")}"
+        )
 
         @tailrec
-        def rec(filesData: Seq[(Iterator[String], Record)]): Unit = {
-          if (filesData.nonEmpty) {
-            //sort read lines by date
-            val sortedBydate = filesData.groupBy(_._2.date).toSeq.sortWith{case ((date1, _), (date2, _)) => date1.isBefore(date2)}
+        def rec(
+            out: BufferedWriter,
+            filesData: Seq[(Iterator[String], Record)]
+        ): Unit = {
+          if filesData.nonEmpty then
+            // sort read lines by date
+            val sortedBydate = filesData.groupBy(_(1).date).toSeq.sortWith {
+              case ((date1, _), (date2, _)) => date1.isBefore(date2)
+            }
             val reduced = reduceRecords(sortedBydate)
 
-            (reduced.toList: @unchecked) match {
-              case head :: tail => {
-                if (head._2.isDefined) newRecord(output, head._2.get)
+            (reduced.toList: @nowarn) match {
+              case (it, Some(r)) :: tail =>
+                newRecord(out, r)
                 val refreshedTail = refreshIterators(tail)
-                if (head._1.hasNext) {
-                  readRecord(head._1.next()) match {
-                    case Some(record) => rec((head._1, record) :: refreshedTail)
-                    case None => rec(refreshedTail)
-                  }
-                } else rec(refreshedTail)
-              }
+                if it.hasNext then
+                  readRecord(it.next()) match
+                    case Some(record) => rec(out, (it, record) :: refreshedTail)
+                    case None         => rec(out, refreshedTail)
+                else rec(out, refreshedTail)
             }
-          }
         }
 
-        rec(refreshIterators(iterators.toList.map((_, None))))
+        Using.resource(Files.newBufferedWriter(target.toNIO)) { out =>
+          val iterators = inputFiles.map: file =>
+            Source.fromFile(file.toIO, Codec.UTF8.name).getLines()
 
-        output.close()
-      } else {
-        println("There are no input files to process")
-      }
+          rec(out, refreshIterators(iterators.toList.map((_, None))))
+        }
+      else println("There are no input files to process")
     }
 
-
   }
 
-  private def newRecord(output: BufferedWriter, record: Record): Unit = {
-    output.write(stringify(record)); output.newLine()
-  }
+  private def newRecord(output: BufferedWriter, record: Record) =
+    output.write(stringify(record))
+    output.newLine()
 
-  private def refreshIterators(list: List[(Iterator[String], Option[Record])]): List[(Iterator[String], Record)] = list.collect {
-    case (iterator, None) if iterator.hasNext => (iterator, readRecord(iterator.next()))
-    case (iterator, x@Some(r)) => (iterator, x)
-  }.collect { case (iterator, Some(record)) => (iterator, record) }
-
-  private def reduceRecords(sortedByDate: Seq[(LocalDate, Seq[(Iterator[String], Record)])]): Seq[(Iterator[String], Option[Record])] = {
-    //reduce values of identical dates(None means keep file iterator while its read record was reduced)
-    sortedByDate.flatMap { case (date, arr) =>
-      val reducedValue = Some(arr.map(_._2).reduce((acc, record) => acc.add(record)))
-      (arr.head._1, reducedValue) +: arr.tail.map { case (p, _) => (p, None) }
+  private def refreshIterators(
+      list: List[(Iterator[String], Option[Record])]
+  ): List[(Iterator[String], Record)] = list
+    .collect {
+      case (iterator, None) if iterator.hasNext =>
+        (iterator, readRecord(iterator.next()))
+      case (iterator, x @ Some(r)) => (iterator, x)
     }
-  }
-}
+    .collect { case (iterator, Some(record)) => (iterator, record) }
 
-
+  private def reduceRecords(
+      sortedByDate: Seq[(LocalDate, Seq[(Iterator[String], Record)])]
+  ): Seq[(Iterator[String], Option[Record])] = 
+    // reduce values of identical dates(None means keep file iterator while its read record was reduced)
+    sortedByDate.flatMap: (date, arr) =>
+      val reducedValue =
+        Some(arr.map(_._2).reduce((acc, record) => acc.add(record)))
+      (arr.head._1, reducedValue) +: arr.tail.map((p, _) => (p, None))
+end Main

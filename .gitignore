@@ -17,6 +17,7 @@ project/plugins/project/
 .worksheet
 .idea/vcs.xml
 data
+merged.dat
 
 .bsp
 .scala-build

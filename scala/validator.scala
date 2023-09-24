@@ -11,8 +11,10 @@ def validate(fileName: String): Unit =
     val iterator = source.getLines()
 
     if iterator.hasNext then
-      val combined = iterator.sliding(2).collect:
-        case Seq(a,b) => (a, b)
+      val combined = iterator
+        .sliding(2)
+        .collect:
+          case Seq(a, b) => (a, b)
 
       val result = combined.forall { (less, greater) =>
         val isBeforeOpt =
