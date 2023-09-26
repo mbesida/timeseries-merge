@@ -1,10 +1,11 @@
-//> using scala "3.3.1"
-//> using lib "com.lihaoyi::os-lib:0.9.1"
+//> using scala 3.3.1
+//> using options -Wunused:all -deprecation
+//> using jvm graalvm:21.0.0
+//> using lib com.lihaoyi::os-lib:0.9.1
 
 import java.io.BufferedWriter
 import java.nio.file.Files
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import scala.annotation.nowarn
 import scala.annotation.tailrec
 import scala.io.Codec
@@ -94,9 +95,9 @@ object Main:
 
   private def reduceRecords(
       sortedByDate: Seq[(LocalDate, Seq[(Iterator[String], Record)])]
-  ): Seq[(Iterator[String], Option[Record])] = 
+  ): Seq[(Iterator[String], Option[Record])] =
     // reduce values of identical dates(None means keep file iterator while its read record was reduced)
-    sortedByDate.flatMap: (date, arr) =>
+    sortedByDate.flatMap: (_, arr) =>
       val reducedValue =
         Some(arr.map(_._2).reduce((acc, record) => acc.add(record)))
       (arr.head._1, reducedValue) +: arr.tail.map((p, _) => (p, None))

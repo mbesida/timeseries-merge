@@ -1,6 +1,5 @@
 import scala.io.Source
 import scala.util.Using
-import java.io.File
 
 /** Checks if all dates are in ascending order inside the file
   */

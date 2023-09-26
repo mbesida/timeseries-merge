@@ -13,13 +13,14 @@ def generate(): Unit =
 
   println(s"Creating directory ${OutputFolder.toString}")
   os.makeDir(OutputFolder)
+
   for idx <- (1 to 100)
   do
     val date = LocalDate.of(1900, 1, 1).plusYears(idx)
     val file = OutputFolder / s"file$idx.dat"
 
     Using.resource(
-      Files.newBufferedWriter((OutputFolder / s"file$idx.dat").wrapped)
+      Files.newBufferedWriter(file.wrapped)
     ): out =>
       for i <- (1 to 500000)
       do
