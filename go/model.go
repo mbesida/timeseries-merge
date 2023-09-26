@@ -3,6 +3,8 @@ package model
 import (
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -13,19 +15,17 @@ type Record struct {
 	Value int
 }
 
-func NewRecord(s string) *Record {
-	var dateStr string
-	var value int
+func ParseRecord(s string) *Record {
+	splitted := strings.Split(s, ":")
 
-	parsed, _ := fmt.Sscanf(s, "%s:%d", &dateStr, &value)
-
-	if parsed != 2 {
+	if len(splitted) != 2 {
 		return nil
 	}
 
-	date, err := time.Parse(DateFormat, dateStr)
+	date, errDate := time.Parse(DateFormat, splitted[0])
+	value, errValue := strconv.Atoi(splitted[1])
 
-	if err != nil {
+	if errDate != nil || errValue != nil {
 		return nil
 	}
 

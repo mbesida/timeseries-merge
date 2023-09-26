@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 	model "timeseries-merge"
 )
@@ -33,31 +31,20 @@ func main() {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		splitted := strings.Split(line, ":")
-
-		if len(splitted) != 2 {
-			log.Fatalf("Incorrect format of a file. Line is %s, err msg is %s\n", line, err.Error())
-		}
-
-		dateStr := splitted[0]
-		valueStr := splitted[1]
-
-		date, errDate := time.Parse(model.DateFormat, dateStr)
-		_, errValue := strconv.Atoi(valueStr)
-
-		if errDate != nil || errValue != nil {
-			log.Fatalln("Incorrect format of a line in file")
+		r := model.ParseRecord(line)
+		if r == nil {
+			log.Fatalf("Incorrect data format. Line is %s\n", line)
 		}
 
 		if previousDate == nil {
 			result = true
-			previousDate = &date
+			previousDate = &r.Date
 		} else {
-			result = previousDate.Before(date)
+			result = previousDate.Before(r.Date)
 			if !result {
 				break
 			}
-			*previousDate = date
+			*previousDate = r.Date
 		}
 	}
 
