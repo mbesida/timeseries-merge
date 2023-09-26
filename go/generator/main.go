@@ -8,10 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-	"timeseries-merge/common"
+
+	model "timeseries-merge"
 )
 
-const OutputFolder = "../data"
+const OutputFolder = "data"
 
 func main() {
 	dir, err := os.Stat(OutputFolder)
@@ -46,7 +47,7 @@ func main() {
 		out := bufio.NewWriterSize(f, 1024*8)
 
 		for j := 1; j <= 500000; j++ {
-			record := common.Record{Date: date.AddDate(0, 0, j), Value: rand.Intn(100) + 1}
+			record := model.Record{Date: date.AddDate(0, 0, j), Value: rand.Intn(100) + 1}
 			out.WriteString(record.String() + "\n")
 		}
 
