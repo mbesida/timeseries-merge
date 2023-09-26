@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const dateFormat = "2006-01-02"
+const DateFormat = "2006-01-02"
 
 type Record struct {
 	Date  time.Time
@@ -23,7 +23,7 @@ func NewRecord(s string) *Record {
 		return nil
 	}
 
-	date, err := time.Parse(dateFormat, dateStr)
+	date, err := time.Parse(DateFormat, dateStr)
 
 	if err != nil {
 		return nil
@@ -40,5 +40,5 @@ func (r *Record) Add(other Record) {
 }
 
 func (r *Record) String() string {
-	return fmt.Sprintf("%s:%d", r.Date.Format(dateFormat), r.Value)
+	return fmt.Sprintf("%s:%d", r.Date.Format(DateFormat), r.Value)
 }
