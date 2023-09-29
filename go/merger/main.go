@@ -5,9 +5,18 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
+	model "timeseries-merge"
+
+	"github.com/igrmk/treemap/v2"
 )
 
 const MaxNumberOfFiles = 100
+
+type item struct {
+	value   int
+	streams []<-chan string
+}
 
 func main() {
 	if len(os.Args) < 3 {
@@ -23,7 +32,7 @@ func main() {
 
 	target := os.Args[1]
 
-	if err := os.Remove(target); err != nil {
+	if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "Can't remove target file %s\n", target)
 		return
 	}
@@ -48,39 +57,46 @@ func main() {
 		streams[i] = stream
 	}
 
+	if e := mergeStreams(streams, target); e != nil {
+		fmt.Fprintf(os.Stderr, "Can't write to target file %s\n", target)
+		return
+	}
 }
 
 func inputFiles() []string {
 	var files []string
-	dir, err := os.Stat(os.Args[2])
+	potentialDirName := os.Args[2]
+	dir, err := os.Stat(potentialDirName)
 
 	if err != nil {
 		return nil
 	}
 
 	if dir.IsDir() {
-		entries, err := os.ReadDir(dir.Name())
+		entries, err := os.ReadDir(potentialDirName)
 
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "Can't read dir %s\n", potentialDirName)
 			return nil
 		}
 
 		for _, entry := range entries {
 			if !entry.IsDir() {
-				files = append(files, dir.Name()+"/"+entry.Name())
+				files = append(files, potentialDirName+"/"+entry.Name())
 			}
 		}
 	} else {
 		for _, arg := range os.Args[2:] {
 			fi, err := os.Stat(arg)
 			if err == nil && !fi.IsDir() {
-				files = append(files, dir.Name()+"/"+arg)
+				fmt.Println(fi.Name())
+				files = append(files, arg)
 			}
 		}
 	}
 
 	if len(files) > 0 {
-		return files[:MaxNumberOfFiles]
+		return files[:min(MaxNumberOfFiles, len(files))]
 	}
 
 	return nil
@@ -96,12 +112,63 @@ func fileStream(file string) (<-chan string, error) {
 
 	go func() {
 		defer f.Close()
+		defer close(stream)
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
-
+			line := scanner.Text()
+			stream <- line
 		}
-
 	}()
 
 	return stream, nil
+}
+
+func mergeStreams(streams []<-chan string, targetFile string) error {
+	f, err := os.Create(targetFile)
+
+	if err != nil {
+		return err
+	}
+
+	w := bufio.NewWriter(f)
+
+	defer func() {
+		w.Flush()
+		f.Close()
+	}()
+
+	grouped := treemap.NewWithKeyCompare[time.Time, item](func(a, b time.Time) bool {
+		return a.Before(b)
+	})
+
+	for _, stream := range streams {
+		readLineFromStream(stream, grouped)
+	}
+
+	for grouped.Len() != 0 {
+		date, item := grouped.Iterator().Key(), grouped.Iterator().Value()
+		record := model.Record{Date: date, Value: item.value}
+		w.WriteString(record.String() + "\n")
+		grouped.Del(date)
+		for _, s := range item.streams {
+			readLineFromStream(s, grouped)
+		}
+	}
+
+	return nil
+}
+
+func readLineFromStream(stream <-chan string, data *treemap.TreeMap[time.Time, item]) {
+	line, ok := <-stream
+	if ok {
+		r := model.ParseRecord(line)
+		if r != nil {
+			v, exists := data.Get(r.Date)
+			if exists {
+				data.Set(r.Date, item{v.value + r.Value, append(v.streams, stream)})
+			} else {
+				data.Set(r.Date, item{r.Value, []<-chan string{stream}})
+			}
+		}
+	}
 }
